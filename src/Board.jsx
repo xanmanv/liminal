@@ -85,17 +85,25 @@ function tagOverlap(a, b) {
   return b.filter(t => setA.has(t.toLowerCase())).length
 }
 
-function LiminalCard({ card, isDragging, onDragStart, onDetail }) {
+function LiminalCard({ card, isDragging, onDragStart, onDetail, isSelected, onToggleSelect }) {
   const ac = ACCENTS[card.accentIndex ?? 0]
   return (
     <div
-      className={`card ${isDragging ? 'card--dragging' : ''}`}
+      className={`card ${isDragging ? 'card--dragging' : ''} ${isSelected ? 'card--selected' : ''}`}
       onMouseDown={e => onDragStart(e, card.id)}
       onTouchStart={e => onDragStart(e, card.id)}
       style={{ left: card.x, top: card.y }}
     >
       <div className="card-header" style={{ background: ac.bg }}>
-        <span style={{ color: ac.text }}>{card.title.slice(0, 55)}{card.title.length > 55 ? '…' : ''}</span>
+        <input
+          type="checkbox"
+          className="card-checkbox"
+          checked={isSelected}
+          onChange={e => { e.stopPropagation(); onToggleSelect(card.id) }}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+        />
+        <span style={{ color: ac.text }}>{card.title.slice(0, 50)}{card.title.length > 50 ? '…' : ''}</span>
       </div>
       <div className="card-body">
         {card.tags.slice(0, 2).map(t => <span key={t} className="tag">{t}</span>)}
@@ -838,6 +846,7 @@ export default function Board() {
   const [events, setEvents]             = useState([])
   const [showQueue, setShowQueue]       = useState(false)
   const [openEvent, setOpenEvent]       = useState(null)
+  const [selectedCardIds, setSelectedCardIds] = useState([])
 
   const boardRef     = useRef(null)
   const canvasRef    = useRef(null)
@@ -1170,14 +1179,24 @@ export default function Board() {
     } catch(e) { setError(e.message||String(e)); setStatus('') }
   }
 
-  async function synthesize() {
-    if(!cards.length)return
+  function toggleCardSelection(id) {
+    setSelectedCardIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  async function synthesize(cardSubset) {
+    const targetCards = cardSubset || cards
+    if (!targetCards.length) return
     setSynthesizing(true); setShowSynth(true); setSynthesis(''); setError('')
-    const summary=cards.map(c=>`"${c.title}" [${c.tags.join(', ')}] -- ${c.description}`).join('\n')
+    const summary = targetCards.map(c => `"${c.title}" [${c.tags.join(', ')}] -- ${c.description}`).join('\n')
     try {
-      const r=await askClaude('You are a synthesis engine for Liminal. Find the emergent pattern in curated knowledge. Steelman the research program. Surface non-obvious connections. What is the board building toward? Distinguish documented evidence, logical inference, and speculative extension. 3 paragraphs max.',`Board:\n\n${summary}\n\nWhat is the emergent pattern?`)
+      const r = await askClaude(
+        'You are a synthesis engine for Liminal. Find the emergent pattern in curated knowledge. Steelman the research program. Surface non-obvious connections. What is the board building toward? Distinguish documented evidence, logical inference, and speculative extension. 3 paragraphs max.',
+        `Board:\n\n${summary}\n\nWhat is the emergent pattern?`
+      )
       setSynthesis(r)
-    } catch(e){setError(e.message||String(e))}
+    } catch(e) { setError(e.message || String(e)) }
     setSynthesizing(false)
   }
 
@@ -1188,7 +1207,12 @@ export default function Board() {
         <input value={urlVal} onChange={e=>setUrlVal(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAdd()} placeholder="Paste a URL to add an idea..." disabled={loading||!dbReady} />
         <button onClick={handleAdd} disabled={loading||!urlVal.trim()||!dbReady}>{loading?'Reading...':'Add'}</button>
         <button className="btn-add-more" onClick={()=>setShowAddModal(true)} disabled={loading||!dbReady}>+ Note / PDF / Image</button>
-        <button className="btn-synth" onClick={synthesize} disabled={synthesizing||cards.length===0}>{synthesizing?'Thinking...':'Synthesize'}</button>
+        <button className="btn-synth" onClick={()=>synthesize()} disabled={synthesizing||cards.length===0}>{synthesizing?'Thinking...':'Synthesize'}</button>
+        {selectedCardIds.length > 0 && (
+          <button className="btn-synth-selected" onClick={()=>synthesize(cards.filter(c=>selectedCardIds.includes(c.id)))} disabled={synthesizing}>
+            Synthesize {selectedCardIds.length} selected
+          </button>
+        )}
         <button className="btn-queue" onClick={()=>setShowQueue(s=>!s)}>
           Queue{events.length>0?` (${events.length})`:''}
         </button>
@@ -1210,7 +1234,7 @@ export default function Board() {
 
           <div className="canvas" ref={canvasRef} style={{width:CANVAS_W,height:CANVAS_H}}>
             {cards.map(card=>(
-              <LiminalCard key={card.id} card={card} isDragging={dragging===card.id} onDragStart={startDrag} onDetail={()=>setOpenCard(card)} />
+              <LiminalCard key={card.id} card={card} isDragging={dragging===card.id} onDragStart={startDrag} onDetail={()=>setOpenCard(card)} isSelected={selectedCardIds.includes(card.id)} onToggleSelect={toggleCardSelection} />
             ))}
           </div>
 
@@ -1226,7 +1250,7 @@ export default function Board() {
       {showCapture&&(
         <SynthesisCapturePanel
           synthesis={synthesis}
-          sourceCardIds={cards.map(c=>c.id)}
+          sourceCardIds={selectedCardIds.length > 0 ? selectedCardIds : cards.map(c=>c.id)}
           cards={cards}
           onSave={saveEvent}
           onClose={()=>setShowCapture(false)}

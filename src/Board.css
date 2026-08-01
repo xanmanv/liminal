@@ -1856,3 +1856,57 @@ body {
     max-height: 300px;
   }
 }
+
+/* ── Card checkbox for selective synthesis ───────────────────────────────── */
+.card-header {
+  height: 90px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 8px;
+  gap: 6px;
+  flex-direction: row;
+}
+
+.card-checkbox {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  accent-color: #ffffff;
+  opacity: 0.7;
+  transition: opacity 0.1s;
+}
+
+.card-checkbox:checked { opacity: 1; }
+.card:hover .card-checkbox { opacity: 1; }
+
+.card-header span {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.card--selected {
+  border-color: #4f6ef7 !important;
+  box-shadow: 0 0 0 2px rgba(79, 110, 247, 0.3);
+}
+
+/* Synthesize selected button */
+.btn-synth-selected {
+  background: #1e2255 !important;
+  border: 1px solid #4f6ef7 !important;
+  border-radius: 6px !important;
+  padding: 7px 14px !important;
+  font-size: 12px !important;
+  color: #a0b0ff !important;
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 500;
+  transition: background 0.12s, color 0.12s;
+}
+
+.btn-synth-selected:hover:not(:disabled) { background: #252870 !important; color: #c0c8ff !important; }
+.btn-synth-selected:disabled { opacity: 0.4; cursor: not-allowed; }
