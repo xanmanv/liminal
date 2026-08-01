@@ -264,7 +264,7 @@ function DetailPanel({ card, cards, onClose, onUpdate, onDelete }) {
   )
 }
 
-function ThinkingPanel({ synthesis, synthesizing, cards, onClose, onResynthesize, onSpawnCard }) {
+function ThinkingPanel({ synthesis, synthesizing, cards, onClose, onResynthesize, onSpawnCard, onSaveToResearch }) {
   const [messages, setMessages]         = useState([])
   const [chatInput, setChatInput]       = useState('')
   const [chatLoading, setChatLoading]   = useState(false)
@@ -338,6 +338,7 @@ function ThinkingPanel({ synthesis, synthesizing, cards, onClose, onResynthesize
   return (
     <div className="synth-panel" ref={panelRef} style={{position:'relative'}}>
       <div className="synth-header">
+        <button className="queue-back-btn" onClick={onClose}>← Board</button>
         <span className="synth-title">Board synthesis</span>
         <div className="synth-header-actions">
           <button className="synth-icon-btn" onClick={onResynthesize} disabled={synthesizing} title="Re-synthesize">r</button>
@@ -385,8 +386,9 @@ function ThinkingPanel({ synthesis, synthesizing, cards, onClose, onResynthesize
       )}
       {synthesis && (
         <div className="synth-footer">
-          <button className="synth-action-btn" onClick={()=>navigator.clipboard.writeText(synthesis)}>Copy synthesis</button>
-          {messages.length>0&&<button className="synth-action-btn" onClick={()=>navigator.clipboard.writeText(`# Synthesis\n\n${synthesis}\n\n# Session\n\n${messages.map(m=>`**${m.role==='user'?'You':'Liminal'}:** ${m.content}`).join('\n\n')}`)}>Export all</button>}
+          <button className="synth-action-btn" onClick={()=>navigator.clipboard.writeText(synthesis)}>Copy</button>
+          {messages.length>0&&<button className="synth-action-btn" onClick={()=>navigator.clipboard.writeText(`# Synthesis\n\n${synthesis}\n\n# Session\n\n${messages.map(m=>`**${m.role==='user'?'You':'Liminal'}:** ${m.content}`).join('\n\n')}`)}>Export</button>}
+          <button className="synth-save-btn" onClick={onSaveToResearch}>Save to Queue</button>
         </div>
       )}
       {selectionPopup&&(
@@ -423,6 +425,399 @@ function ThinkingPanel({ synthesis, synthesizing, cards, onClose, onResynthesize
   )
 }
 
+// ── ResearchQueuePanel ────────────────────────────────────────────────────────
+// Slides in from the right alongside the board.
+// Shows all saved synthesis events as a browseable list.
+
+const FLAG_COLORS = { Research: '#4f6ef7', Hold: '#D97706', Publish: '#16A34A', Watch: '#9333EA' }
+const PRIORITY_COLORS = { High: '#f87171', Medium: '#D97706', Background: '#4a5068' }
+
+function ResearchQueuePanel({ events, cards, onClose, onOpenEvent }) {
+  const sorted = [...events].sort((a,b) => new Date(b.created) - new Date(a.created))
+
+  function firstLine(text) {
+    if (!text) return ''
+    const line = text.split('\n')[0].slice(0, 130)
+    return line.length < text.length ? line + '…' : line
+  }
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <div className="queue-panel">
+      <div className="queue-header">
+        <button className="queue-back-btn" onClick={onClose}>← Board</button>
+        <span className="queue-title">Research Queue</span>
+        {events.length > 0 && <span className="queue-count">{events.length}</span>}
+        <button className="close-btn" onClick={onClose}>×</button>
+      </div>
+      <div className="queue-body">
+        {sorted.length === 0 ? (
+          <div className="queue-empty">No synthesis events saved yet. Synthesize a board and hit "Save to Queue".</div>
+        ) : sorted.map(event => (
+          <div key={event.id} className="queue-item" onClick={() => onOpenEvent(event)}>
+            <div className="queue-item-flags">
+              {event.actionFlag && (
+                <span className="queue-flag" style={{ color: FLAG_COLORS[event.actionFlag] || '#7b8ef7' }}>{event.actionFlag}</span>
+              )}
+              {event.priority && (
+                <span className="queue-priority" style={{ color: PRIORITY_COLORS[event.priority] || '#4a5068' }}>{event.priority}</span>
+              )}
+              {event.project && event.project !== 'General' && (
+                <span className="queue-project">{event.project}</span>
+              )}
+            </div>
+            <div className="queue-item-text">{firstLine(event.synthesisText)}</div>
+            {event.derivedQuestions?.length > 0 && (
+              <div className="queue-item-questions">
+                {event.derivedQuestions.slice(0, 2).map((q, i) => (
+                  <div key={i} className="queue-item-q">— {q}</div>
+                ))}
+                {event.derivedQuestions.length > 2 && (
+                  <div className="queue-item-q-more">+{event.derivedQuestions.length - 2} more</div>
+                )}
+              </div>
+            )}
+            <div className="queue-item-meta">
+              <span className="queue-date">{formatDate(event.created)}</span>
+              {event.sourceCardIds?.length > 0 && (
+                <span className="queue-cards">{event.sourceCardIds.length} card{event.sourceCardIds.length !== 1 ? 's' : ''}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── EventDetailOverlay ────────────────────────────────────────────────────────
+// Full reading and editing view for a saved synthesis event.
+// Opens on top of everything when a queue item is clicked.
+
+function EventDetailOverlay({ event, cards, onClose, onUpdate, onDelete }) {
+  const [synthesisText, setSynthesisText] = useState(event.synthesisText || '')
+  const [questions, setQuestions]         = useState([...(event.derivedQuestions || [])])
+  const [annotation, setAnnotation]       = useState(event.annotation || '')
+  const [actionFlag, setActionFlag]       = useState(event.actionFlag || 'Research')
+  const [priority, setPriority]           = useState(event.priority || 'High')
+  const [project, setProject]             = useState(event.project || 'General')
+  const [newQuestion, setNewQuestion]     = useState('')
+  const [saving, setSaving]               = useState(false)
+  const [dirty, setDirty]                 = useState(false)
+  const scrollBodyRef                     = useRef(null)
+
+  // Prevent iOS rubber band bounce on the scroll container
+  useEffect(() => {
+    const el = scrollBodyRef.current
+    if (!el) return
+    let startY = 0
+    const onTouchStart = e => { startY = e.touches[0].clientY }
+    const onTouchMove = e => {
+      const scrollTop = el.scrollTop
+      const maxScroll = el.scrollHeight - el.clientHeight
+      // Only prevent if there's no scrollable content at all
+      if (maxScroll <= 0) e.preventDefault()
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [])
+
+  const sourceCards = cards.filter(c => event.sourceCardIds?.includes(c.id))
+
+  function addQuestion() {
+    if (!newQuestion.trim()) return
+    setQuestions(prev => [...prev, newQuestion.trim()])
+    setNewQuestion('')
+    setDirty(true)
+  }
+
+  function removeQuestion(i) {
+    setQuestions(prev => prev.filter((_, idx) => idx !== i))
+    setDirty(true)
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    await onUpdate({
+      ...event,
+      synthesisText,
+      derivedQuestions: questions,
+      annotation,
+      actionFlag,
+      priority,
+      project,
+      modified: new Date().toISOString(),
+    })
+    setSaving(false)
+    setDirty(false)
+  }
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  }
+
+  return (
+    <div className="event-overlay" onClick={onClose}>
+      <div className="event-panel" onClick={e => e.stopPropagation()}>
+
+        <div className="event-header">
+          <div className="event-header-meta">
+            <button className="queue-back-btn" onClick={onClose}>← Queue</button>
+            <span className="event-date">{formatDate(event.created)}</span>
+            {event.model && <span className="event-model">{event.model.includes('opus') ? 'Opus' : 'Sonnet'}</span>}
+          </div>
+          <div className="event-header-actions">
+            {dirty && (
+              <button className="event-save-btn" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : 'Save changes'}
+              </button>
+            )}
+            <button className="close-btn" onClick={onClose}>×</button>
+          </div>
+        </div>
+
+        <div className="event-body" ref={scrollBodyRef}>
+
+          {/* Left column */}
+          <div className="event-left">
+
+            <div className="capture-section-label">Action</div>
+            <div className="capture-flags">
+              {ACTION_FLAGS.map(f => (
+                <button key={f} className={`capture-flag ${actionFlag===f?'capture-flag--active':''}`}
+                  onClick={() => { setActionFlag(f); setDirty(true) }}>{f}</button>
+              ))}
+            </div>
+
+            <div className="capture-section-label">Priority</div>
+            <div className="capture-flags">
+              {PRIORITIES.map(p => (
+                <button key={p} className={`capture-flag ${priority===p?'capture-flag--active':''}`}
+                  onClick={() => { setPriority(p); setDirty(true) }}>{p}</button>
+              ))}
+            </div>
+
+            <div className="capture-section-label">Project</div>
+            <select className="capture-select" value={project} onChange={e => { setProject(e.target.value); setDirty(true) }}>
+              {PROJECTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+
+            {sourceCards.length > 0 && (
+              <>
+                <div className="capture-section-label">Source cards</div>
+                <div className="capture-source-cards">
+                  {sourceCards.map(c => <div key={c.id} className="capture-source-card">{c.title}</div>)}
+                </div>
+              </>
+            )}
+
+            <div className="capture-section-label">Annotation</div>
+            <textarea
+              className="capture-annotation"
+              placeholder="Your note on what matters here..."
+              value={annotation}
+              onChange={e => { setAnnotation(e.target.value); setDirty(true) }}
+            />
+
+            <button className="event-delete-btn" onClick={() => {
+              if (window.confirm('Delete this synthesis event? This cannot be undone.')) onDelete(event.id)
+            }}>Delete event</button>
+
+          </div>
+
+          {/* Right column */}
+          <div className="event-right">
+
+            <div className="capture-section-label">Synthesis</div>
+            <textarea
+              className="capture-synthesis"
+              value={synthesisText}
+              onChange={e => { setSynthesisText(e.target.value); setDirty(true) }}
+            />
+
+            <div className="capture-section-label">Derived questions</div>
+            <div className="capture-questions">
+              {questions.map((q, i) => (
+                <div key={i} className="capture-question">
+                  <span className="capture-question-text">{q}</span>
+                  <button className="capture-q-remove" onClick={() => removeQuestion(i)}>×</button>
+                </div>
+              ))}
+              <div className="capture-q-row">
+                <input
+                  className="capture-q-input"
+                  placeholder="Add a question... (Enter)"
+                  value={newQuestion}
+                  onChange={e => setNewQuestion(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addQuestion()}
+                />
+                <button className="capture-q-add" onClick={addQuestion}>Add</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── SynthesisCapturePanel ─────────────────────────────────────────────────────
+// Editable save interface for synthesis events.
+// The human verification pass — what gets saved is co-authored, not raw output.
+
+const ACTION_FLAGS = ['Research', 'Hold', 'Publish', 'Watch']
+const PRIORITIES   = ['High', 'Medium', 'Background']
+const PROJECTS     = ['General', 'EP03', 'Liminal', 'CarrierWave']
+
+function SynthesisCapturePanel({ synthesis, sourceCardIds, cards, onSave, onClose }) {
+  const [synthesisText, setSynthesisText] = useState(synthesis)
+  const [questions, setQuestions]         = useState([])
+  const [newQuestion, setNewQuestion]     = useState('')
+  const [annotation, setAnnotation]       = useState('')
+  const [actionFlag, setActionFlag]       = useState('Research')
+  const [priority, setPriority]           = useState('High')
+  const [project, setProject]             = useState('General')
+  const [saving, setSaving]               = useState(false)
+
+  const sourceCards = cards.filter(c => sourceCardIds.includes(c.id))
+
+  function addQuestion() {
+    if (!newQuestion.trim()) return
+    setQuestions(prev => [...prev, newQuestion.trim()])
+    setNewQuestion('')
+  }
+
+  function removeQuestion(i) {
+    setQuestions(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  async function handleSave() {
+    if (!synthesisText.trim()) return
+    setSaving(true)
+    const event = {
+      id:               crypto.randomUUID(),
+      type:             'synthesis_event',
+      created:          new Date().toISOString(),
+      modified:         new Date().toISOString(),
+      sourceCardIds:    sourceCardIds,
+      synthesisText:    synthesisText.trim(),
+      derivedQuestions: questions,
+      annotation:       annotation.trim(),
+      actionFlag,
+      priority,
+      project,
+      linkedIds:        [],
+      status:           'active',
+      model:            'claude-sonnet-4-6',
+    }
+    await onSave(event)
+    setSaving(false)
+  }
+
+  return (
+    <div className="capture-overlay" onClick={onClose}>
+      <div className="capture-panel" onClick={e => e.stopPropagation()}>
+
+        <div className="capture-header">
+          <span className="capture-title">Save to Research Queue</span>
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="capture-body">
+
+          {/* Left column — metadata */}
+          <div className="capture-left">
+
+            <div className="capture-section-label">Action</div>
+            <div className="capture-flags">
+              {ACTION_FLAGS.map(f => (
+                <button key={f} className={`capture-flag ${actionFlag===f?'capture-flag--active':''}`} onClick={() => setActionFlag(f)}>{f}</button>
+              ))}
+            </div>
+
+            <div className="capture-section-label">Priority</div>
+            <div className="capture-flags">
+              {PRIORITIES.map(p => (
+                <button key={p} className={`capture-flag ${priority===p?'capture-flag--active':''}`} onClick={() => setPriority(p)}>{p}</button>
+              ))}
+            </div>
+
+            <div className="capture-section-label">Project</div>
+            <select className="capture-select" value={project} onChange={e => setProject(e.target.value)}>
+              {PROJECTS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+
+            <div className="capture-section-label">Your annotation</div>
+            <textarea
+              className="capture-annotation"
+              placeholder="What strikes you most? What is the most significant thread here?"
+              value={annotation}
+              onChange={e => setAnnotation(e.target.value)}
+            />
+
+            <div className="capture-section-label">Source cards</div>
+            <div className="capture-source-cards">
+              {sourceCards.length === 0
+                ? <div className="capture-source-all">All board cards</div>
+                : sourceCards.map(c => <div key={c.id} className="capture-source-card">{c.title}</div>)
+              }
+            </div>
+
+          </div>
+
+          {/* Right column — synthesis + questions */}
+          <div className="capture-right">
+
+            <div className="capture-section-label">Synthesis <span className="capture-edit-hint">— edit to hone before saving</span></div>
+            <textarea
+              className="capture-synthesis"
+              value={synthesisText}
+              onChange={e => setSynthesisText(e.target.value)}
+            />
+
+            <div className="capture-section-label">Derived questions</div>
+            <div className="capture-questions">
+              {questions.map((q, i) => (
+                <div key={i} className="capture-question">
+                  <span className="capture-question-text">{q}</span>
+                  <button className="capture-q-remove" onClick={() => removeQuestion(i)}>×</button>
+                </div>
+              ))}
+              <div className="capture-q-row">
+                <input
+                  className="capture-q-input"
+                  placeholder="Add a research question this raised... (Enter to add)"
+                  value={newQuestion}
+                  onChange={e => setNewQuestion(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addQuestion()}
+                />
+                <button className="capture-q-add" onClick={addQuestion}>Add</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div className="capture-footer">
+          <button className="capture-cancel" onClick={onClose}>Cancel</button>
+          <button className="capture-save" onClick={handleSave} disabled={saving || !synthesisText.trim()}>
+            {saving ? 'Saving...' : 'Save to Research Queue'}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
 export default function Board() {
   const [cards, setCards]               = useState([])
   const [dbReady, setDbReady]           = useState(false)
@@ -439,6 +834,10 @@ export default function Board() {
   const [status, setStatus]             = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [isPanning, setIsPanning]       = useState(false)
+  const [showCapture, setShowCapture]   = useState(false)
+  const [events, setEvents]             = useState([])
+  const [showQueue, setShowQueue]       = useState(false)
+  const [openEvent, setOpenEvent]       = useState(null)
 
   const boardRef     = useRef(null)
   const canvasRef    = useRef(null)
@@ -484,7 +883,12 @@ export default function Board() {
         if (res.ok) {
           const data = await res.json()
           if (data.cards && data.cards.length > 0) {
-            setCards(toCanvasSpace(data.cards)); setDbReady(true); setStatus(''); return
+            setCards(toCanvasSpace(data.cards)); setDbReady(true); setStatus('')
+            // Load events alongside cards
+            workerFetch('/events').then(r => r.ok ? r.json() : { events: [] }).then(d => {
+              if (d.events?.length) setEvents(d.events)
+            }).catch(() => {})
+            return
           }
         }
         const raw = localStorage.getItem('liminal-cards')
@@ -499,6 +903,10 @@ export default function Board() {
           }
         }
         setDbReady(true); setStatus('')
+        // Load events in background
+        workerFetch('/events').then(r => r.ok ? r.json() : { events: [] }).then(d => {
+          if (d.events?.length) setEvents(d.events)
+        }).catch(() => {})
       } catch (e) {
         console.error('[Liminal] Init failed:', e)
         try { const raw=localStorage.getItem('liminal-cards'); if(raw) setCards(JSON.parse(raw)) } catch {}
@@ -719,6 +1127,39 @@ export default function Board() {
     workerFetch(`/card/${id}`,'DELETE').catch(e=>console.error('[Liminal] Delete card:',e))
   }
 
+  // Save synthesis event to Research Queue
+  async function saveEvent(event) {
+    setEvents(prev => [...prev, event])
+    setShowCapture(false)
+    try {
+      await workerFetch(`/event/${event.id}`, 'PUT', event)
+      setStatus('Saved to Research Queue')
+      setTimeout(() => setStatus(''), 2000)
+    } catch (e) {
+      console.error('[Liminal] Save event failed:', e)
+      setError(`Failed to save: ${e.message}`)
+    }
+  }
+
+  async function updateEvent(updated) {
+    setEvents(prev => prev.map(e => e.id === updated.id ? updated : e))
+    setOpenEvent(updated)
+    try {
+      await workerFetch(`/event/${updated.id}`, 'PUT', updated)
+      setStatus('Event updated')
+      setTimeout(() => setStatus(''), 1500)
+    } catch (e) {
+      console.error('[Liminal] Update event failed:', e)
+      setError(`Failed to update: ${e.message}`)
+    }
+  }
+
+  async function deleteEventItem(id) {
+    setEvents(prev => prev.filter(e => e.id !== id))
+    setOpenEvent(null)
+    workerFetch(`/event/${id}`, 'DELETE').catch(e => console.error('[Liminal] Delete event:', e))
+  }
+
   async function spawnCardFromText(text, presetTitle, presetUrl) {
     setStatus('Creating card from insight...')
     try {
@@ -748,6 +1189,9 @@ export default function Board() {
         <button onClick={handleAdd} disabled={loading||!urlVal.trim()||!dbReady}>{loading?'Reading...':'Add'}</button>
         <button className="btn-add-more" onClick={()=>setShowAddModal(true)} disabled={loading||!dbReady}>+ Note / PDF / Image</button>
         <button className="btn-synth" onClick={synthesize} disabled={synthesizing||cards.length===0}>{synthesizing?'Thinking...':'Synthesize'}</button>
+        <button className="btn-queue" onClick={()=>setShowQueue(s=>!s)}>
+          Queue{events.length>0?` (${events.length})`:''}
+        </button>
       </div>
 
       {status&&<div className="status-bar">{status}</div>}
@@ -773,10 +1217,31 @@ export default function Board() {
           {openCard&&<DetailPanel card={openCard} cards={cards} onClose={()=>setOpenCard(null)} onUpdate={updateCard} onDelete={deleteCard} />}
         </div>
 
-        {showSynth&&<ThinkingPanel synthesis={synthesis} synthesizing={synthesizing} cards={cards} onClose={()=>setShowSynth(false)} onResynthesize={synthesize} onSpawnCard={spawnCardFromText} />}
+        {showSynth&&<ThinkingPanel synthesis={synthesis} synthesizing={synthesizing} cards={cards} onClose={()=>setShowSynth(false)} onResynthesize={synthesize} onSpawnCard={spawnCardFromText} onSaveToResearch={()=>setShowCapture(true)} />}
+        {showQueue&&<ResearchQueuePanel events={events} cards={cards} onClose={()=>setShowQueue(false)} onOpenEvent={setOpenEvent} />}
       </div>
 
       {showAddModal&&<AddModal onClose={()=>setShowAddModal(false)} onPending={setPending} setError={setError} setStatus={setStatus} />}
+
+      {showCapture&&(
+        <SynthesisCapturePanel
+          synthesis={synthesis}
+          sourceCardIds={cards.map(c=>c.id)}
+          cards={cards}
+          onSave={saveEvent}
+          onClose={()=>setShowCapture(false)}
+        />
+      )}
+
+      {openEvent&&(
+        <EventDetailOverlay
+          event={openEvent}
+          cards={cards}
+          onClose={()=>setOpenEvent(null)}
+          onUpdate={updateEvent}
+          onDelete={deleteEventItem}
+        />
+      )}
     </div>
   )
 }
