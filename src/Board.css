@@ -375,6 +375,8 @@ body {
   color: #8892a4;
   line-height: 1.65;
   margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .panel-tags {
@@ -1910,3 +1912,79 @@ body {
 
 .btn-synth-selected:hover:not(:disabled) { background: #252870 !important; color: #c0c8ff !important; }
 .btn-synth-selected:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── TagConfirm tag editing ─────────────────────────────────────────────── */
+.confirm-tag-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.confirm-tag-remove {
+  font-size: 11px !important;
+  padding: 2px 5px !important;
+  border-radius: 3px !important;
+  border: none !important;
+  background: transparent !important;
+  color: #4a5068 !important;
+  cursor: pointer;
+  line-height: 1;
+}
+.confirm-tag-remove:hover { color: #f87171 !important; background: transparent !important; }
+
+.confirm-tag-add {
+  font-size: 11px !important;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  border: 1px dashed #3a4080 !important;
+  background: transparent !important;
+  color: #7b8ef7 !important;
+  cursor: pointer;
+}
+.confirm-tag-add:hover { border-color: #7b8ef7 !important; color: #a0b0ff !important; }
+
+/* ── Editable description in DetailPanel ───────────────────────────────── */
+.edit-desc-textarea {
+  width: 100%;
+  min-height: 60px;
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: 1px solid #3a4080;
+  background: #0f1117;
+  color: #c8d0e8;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+  box-sizing: border-box;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.edit-desc-textarea:focus { border-color: #7b8ef7; }
+
+.edit-hint-muted { color: #4a5068; font-style: italic; }
+
+/* ── Description edit save row ─────────────────────────────────────────── */
+.edit-desc-wrap { display: flex; flex-direction: column; gap: 4px; }
+
+.edit-desc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.edit-desc-hint { font-size: 10px; color: #4a5068; }
+
+.edit-desc-save {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid #3a4080;
+  background: #252840;
+  color: #a0b0ff;
+  cursor: pointer;
+}
+.edit-desc-save:hover { background: #2e3360; color: #e2e8f0; }

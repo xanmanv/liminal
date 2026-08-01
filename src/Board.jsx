@@ -119,12 +119,20 @@ function LiminalCard({ card, isDragging, onDragStart, onDetail, isSelected, onTo
 function TagConfirm({ pending, onConfirm, onDiscard }) {
   const [tags, setTags] = useState([...pending.tags])
   const updateTag = (i, v) => setTags(t => { const n = [...t]; n[i] = v; return n })
+  const removeTag = (i) => setTags(t => t.filter((_, idx) => idx !== i))
+  const addTag    = () => { if (tags.length >= 6) return; setTags(t => [...t, '']) }
   return (
     <div className="confirm-bar">
       <span className="confirm-title">"{pending.title.slice(0, 32)}{pending.title.length > 32 ? '…' : ''}"</span>
       <span className="confirm-label">Tags:</span>
-      {tags.map((t, i) => <input key={i} value={t} onChange={e => updateTag(i, e.target.value)} className="tag-input" />)}
-      <button onClick={() => onConfirm(tags)}>Add to board</button>
+      {tags.map((t, i) => (
+        <span key={i} className="confirm-tag-wrap">
+          <input value={t} onChange={e => updateTag(i, e.target.value)} className="tag-input" autoFocus={t === ''} />
+          <button className="confirm-tag-remove" onClick={() => removeTag(i)} title="Remove tag">×</button>
+        </span>
+      ))}
+      {tags.length < 6 && <button className="confirm-tag-add" onClick={addTag}>+ tag</button>}
+      <button onClick={() => onConfirm(tags.filter(t => t.trim()))}>Add to board</button>
       <button className="btn-ghost" onClick={onDiscard}>Discard</button>
     </div>
   )
@@ -218,19 +226,22 @@ function AddModal({ onClose, onPending, setError, setStatus }) {
 function DetailPanel({ card, cards, onClose, onUpdate, onDelete }) {
   const [editTitle, setEditTitle]   = useState(false)
   const [titleVal, setTitleVal]     = useState(card.title)
+  const [editDesc, setEditDesc]     = useState(false)
+  const [descVal, setDescVal]       = useState(card.description || '')
   const [tags, setTags]             = useState([...card.tags])
   const [editingTag, setEditingTag] = useState(null)
   const [tagVal, setTagVal]         = useState('')
 
   function saveTitle() { onUpdate(card.id, { title: titleVal }); setEditTitle(false) }
+  function saveDesc()  { onUpdate(card.id, { description: descVal }); setEditDesc(false) }
   function saveTag(i)  { const n=[...tags]; n[i]=tagVal; setTags(n); onUpdate(card.id,{tags:n}); setEditingTag(null) }
   function removeTag(i){ const n=tags.filter((_,idx)=>idx!==i); setTags(n); onUpdate(card.id,{tags:n}) }
-  function addTag()    { if(tags.length>=6)return; const n=[...tags,'new-tag']; setTags(n); setEditingTag(n.length-1); setTagVal('new-tag') }
+  function addTag()    { if(tags.length>=6)return; const n=[...tags,'']; setTags(n); setEditingTag(n.length-1); setTagVal('') }
   const connected = cards.filter(c => c.id !== card.id && tagOverlap(card.tags, c.tags) > 0)
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="panel" onClick={e => e.stopPropagation()}>
+      <div className="panel" onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
         <div className="panel-header">
           <span>Idea detail</span>
           <button className="close-btn" onClick={onClose}>x</button>
@@ -239,7 +250,22 @@ function DetailPanel({ card, cards, onClose, onUpdate, onDelete }) {
           ? <input autoFocus value={titleVal} onChange={e=>setTitleVal(e.target.value)} onBlur={saveTitle} onKeyDown={e=>e.key==='Enter'&&saveTitle()} className="edit-title-input" />
           : <div className="panel-title editable" onClick={()=>setEditTitle(true)}>{card.title} <span className="edit-hint">e</span></div>
         }
-        <div className="panel-desc">{card.description}</div>
+        {editDesc
+          ? <div className="edit-desc-wrap">
+              <textarea autoFocus value={descVal}
+                onChange={e=>setDescVal(e.target.value)}
+                onInput={e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px'}}
+                onKeyDown={e=>{if(e.key==='Escape')saveDesc();if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))saveDesc()}}
+                className="edit-desc-textarea"
+                ref={el=>{if(el){el.style.height='auto';el.style.height=el.scrollHeight+'px'}}}
+              />
+              <div className="edit-desc-actions">
+                <span className="edit-desc-hint">Ctrl+Enter to save</span>
+                <button className="edit-desc-save" onMouseDown={e=>{e.preventDefault();saveDesc()}}>Save</button>
+              </div>
+            </div>
+          : <div className="panel-desc editable" onClick={()=>setEditDesc(true)}>{card.description || <span className="edit-hint-muted">Click to add description</span>} <span className="edit-hint">e</span></div>
+        }
         <div className="panel-tags">
           {tags.map((t,i) => editingTag===i
             ? <input key={i} autoFocus value={tagVal} onChange={e=>setTagVal(e.target.value)} onBlur={()=>saveTag(i)} onKeyDown={e=>e.key==='Enter'&&saveTag(i)} className="tag-input" style={{width:80}} />
@@ -350,7 +376,7 @@ function ThinkingPanel({ synthesis, synthesizing, cards, onClose, onResynthesize
         <span className="synth-title">Board synthesis</span>
         <div className="synth-header-actions">
           <button className="synth-icon-btn" onClick={onResynthesize} disabled={synthesizing} title="Re-synthesize">r</button>
-          {synthesis && <button className={`synth-icon-btn ${showChat?'synth-icon-btn--active':''}`} onClick={()=>setShowChat(s=>!s)}>c</button>}
+          {synthesis && <button className={`synth-icon-btn ${showChat?'synth-icon-btn--active':''}`} onClick={()=>setShowChat(s=>!s)} title="Open thinking environment">c</button>}
           <button className="close-btn" onClick={onClose}>x</button>
         </div>
       </div>
@@ -930,6 +956,7 @@ export default function Board() {
     const board = boardRef.current
     if (!board) return
     const handleWheel = e => {
+      if (e.target.closest('.panel, .synth-panel, .queue-panel, .capture-panel, .event-panel, .ideas-panel')) return
       e.preventDefault()
       const br  = board.getBoundingClientRect()
       const cx  = e.clientX - br.left
@@ -1104,13 +1131,47 @@ export default function Board() {
   }, [dragging, dragOff])
 
   async function handleAdd() {
-    if (!urlVal.trim()||loading) return
-    const u=urlVal.trim(); setUrlVal(''); setLoading(true); setError(''); setStatus('Reading...')
+    if (!urlVal.trim() || loading) return
+    const u = urlVal.trim()
+    setUrlVal(''); setLoading(true); setError(''); setStatus('Fetching page...')
     try {
-      const raw  = await askClaude('You extract metadata from URLs. Return only valid JSON.', `URL: ${u}\n\nReturn: {"title":"concise title max 60 chars","tags":["tag1","tag2"],"description":"1-2 sentence summary"}`)
-      const meta = JSON.parse(raw.replace(/```json|```/g,'').trim())
-      setStatus(''); setPending({ url: u, ...meta })
-    } catch (e) { setError(e.message||String(e)); setStatus('') }
+      // Step 1: Try to fetch page content via CORS proxy
+      let pageText = ''
+      try {
+        const proxyRes = await fetch(
+          `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+          { signal: AbortSignal.timeout(8000) }
+        )
+        if (proxyRes.ok) {
+          const proxyData = await proxyRes.json()
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(proxyData.contents || '', 'text/html')
+          doc.querySelectorAll('script, style, nav, header, footer, aside').forEach(el => el.remove())
+          pageText = (doc.body?.innerText || doc.body?.textContent || '')
+            .replace(/\s+/g, ' ').trim().slice(0, 6000)
+        }
+      } catch {
+        // Proxy failed or timed out — fall through to URL-only mode
+      }
+
+      setStatus('Reading...')
+
+      const prompt = pageText
+        ? `URL: ${u}\n\nPage content:\n${pageText}\n\nReturn: {"title":"concise title max 60 chars","tags":["tag1","tag2","tag3"],"description":"1-2 sentence summary"}`
+        : `URL: ${u}\n\nPage content could not be fetched. Infer from the URL structure alone.\n\nReturn: {"title":"concise title max 60 chars","tags":["tag1","tag2","tag3"],"description":"1-2 sentence summary"}`
+
+      const raw = await askClaude(
+        'You extract metadata from web pages. You MUST return ONLY a valid JSON object — no preamble, no explanation, no markdown fences, no conversational text. Even if you cannot access the URL, infer from it and return JSON.',
+        prompt
+      )
+
+      const meta = JSON.parse(raw.replace(/```json|```/g, '').trim())
+      setStatus('')
+      setPending({ url: u, ...meta })
+    } catch (e) {
+      setError(e.message || String(e))
+      setStatus('')
+    }
     setLoading(false)
   }
 
