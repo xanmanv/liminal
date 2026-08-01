@@ -21,15 +21,16 @@ body {
   overflow: hidden;
 }
 
-/* Toolbar */
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 10px 16px;
   background: #1a1d27;
   border-bottom: 1px solid #2a2d3a;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .brand {
@@ -39,10 +40,12 @@ body {
   color: #e2e8f0;
   white-space: nowrap;
   margin-right: 4px;
+  order: 1;
 }
 
 .toolbar input {
   flex: 1;
+  min-width: 120px;
   background: #0f1117;
   border: 1px solid #2a2d3a;
   border-radius: 6px;
@@ -50,6 +53,7 @@ body {
   font-size: 13px;
   color: #e2e8f0;
   outline: none;
+  order: 2;
 }
 
 .toolbar input:focus { border-color: #4f6ef7; }
@@ -59,21 +63,27 @@ body {
   background: #1e2235;
   border: 1px solid #2a2d3a;
   border-radius: 6px;
-  padding: 7px 16px;
+  padding: 7px 14px;
   font-size: 13px;
   color: #a0aec0;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.12s, color 0.12s;
+  order: 3;
 }
 
 .toolbar button:hover:not(:disabled) { background: #252840; color: #e2e8f0; }
 .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.btn-synth { color: #7b8ef7 !important; border-color: #3a4080 !important; }
+.btn-synth {
+  color: #7b8ef7 !important;
+  border-color: #3a4080 !important;
+  order: 4;
+}
+
 .btn-synth:hover:not(:disabled) { background: #1e2255 !important; color: #a0b0ff !important; }
 
-/* Status / Error */
+/* ── Status / Error ──────────────────────────────────────────────────────── */
 .status-bar {
   padding: 7px 16px;
   background: #1a2340;
@@ -108,7 +118,7 @@ body {
   flex-shrink: 0;
 }
 
-/* Confirm bar */
+/* ── Confirm bar ─────────────────────────────────────────────────────────── */
 .confirm-bar {
   display: flex;
   align-items: center;
@@ -148,16 +158,17 @@ body {
 .btn-ghost { background: none !important; border-color: transparent !important; color: #4a5068 !important; }
 .btn-ghost:hover { color: #a0aec0 !important; }
 
-/* Main area — board + synth side by side */
+/* ── Main area ───────────────────────────────────────────────────────────── */
 .main-area {
   flex: 1;
   display: flex;
   flex-direction: row;
   overflow: hidden;
   align-items: stretch;
+  min-height: 0;
 }
 
-/* Board */
+/* ── Board ───────────────────────────────────────────────────────────────── */
 .board {
   flex: 1;
   position: relative;
@@ -165,6 +176,19 @@ body {
   background: #0f1117;
   background-image: radial-gradient(circle, #1e2235 1px, transparent 1px);
   background-size: 28px 28px;
+  min-height: 0;
+  cursor: grab;
+}
+
+.board--panning { cursor: grabbing; }
+
+/* ── Infinite canvas ─────────────────────────────────────────────────────── */
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  /* transform applied via JS for performance */
 }
 
 .empty {
@@ -176,9 +200,11 @@ body {
   pointer-events: none;
   font-size: 13px;
   color: #2a2d3a;
+  text-align: center;
+  padding: 20px;
 }
 
-/* Cards */
+/* ── Cards ───────────────────────────────────────────────────────────────── */
 .card {
   position: absolute;
   width: 162px;
@@ -189,6 +215,7 @@ body {
   user-select: none;
   cursor: grab;
   transition: border-color 0.12s, box-shadow 0.12s;
+  touch-action: none; /* prevents scroll interference during touch drag */
 }
 
 .card:hover { border-color: #3a3d50; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
@@ -242,8 +269,8 @@ body {
   flex: 1;
   border: none;
   background: none;
-  padding: 5px 0;
-  font-size: 10px;
+  padding: 7px 0; /* slightly taller tap target on mobile */
+  font-size: 11px;
   color: #4a5068;
   cursor: pointer;
   font-family: inherit;
@@ -252,7 +279,7 @@ body {
 
 .card-actions button:hover { background: #252840; color: #a0aec0; }
 
-/* Detail overlay */
+/* ── Detail overlay ──────────────────────────────────────────────────────── */
 .overlay {
   position: absolute;
   inset: 0;
@@ -261,6 +288,7 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 80;
+  padding: 16px;
 }
 
 .panel {
@@ -269,7 +297,8 @@ body {
   border: 1px solid #2a2d3a;
   padding: 20px;
   width: 320px;
-  max-height: 480px;
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
 
@@ -290,7 +319,12 @@ body {
   color: #4a5068;
   font-size: 20px;
   line-height: 1;
-  padding: 0;
+  padding: 4px;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .close-btn:hover { color: #a0aec0; }
@@ -389,7 +423,7 @@ body {
 .delete-btn {
   margin-top: 16px;
   width: 100%;
-  padding: 7px 0;
+  padding: 9px 0;
   font-size: 12px;
   background: none;
   border: 1px solid #3a2020;
@@ -423,7 +457,7 @@ body {
 .connection-title { font-size: 13px; font-weight: 500; color: #e2e8f0; margin-bottom: 3px; }
 .connection-hint { font-size: 11px; color: #4a5068; }
 
-/* Synthesis side panel */
+/* ── Synthesis side panel ────────────────────────────────────────────────── */
 .synth-panel {
   width: 33%;
   min-width: 260px;
@@ -464,8 +498,13 @@ body {
   color: #4a5068;
   cursor: pointer;
   font-size: 16px;
-  padding: 0;
+  padding: 4px;
   line-height: 1;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .synth-icon-btn:hover:not(:disabled) { color: #7b8ef7; }
@@ -475,6 +514,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .synth-thinking {
@@ -494,10 +534,12 @@ body {
   padding: 12px 16px;
   border-top: 1px solid #2a2d3a;
   flex-shrink: 0;
+  display: flex;
+  gap: 8px;
 }
 
 .synth-action-btn {
-  width: 100%;
+  flex: 1;
   padding: 7px 0;
   font-size: 12px;
   background: #1e2235;
@@ -510,7 +552,6 @@ body {
 
 .synth-action-btn:hover { background: #252840; color: #e2e8f0; }
 
-/* Synthesis body short mode when chat is open */
 .synth-body--short {
   max-height: 140px;
   flex: none;
@@ -520,7 +561,7 @@ body {
 
 .synth-icon-btn--active { color: #7b8ef7 !important; }
 
-/* Thinking environment */
+/* ── Thinking environment ────────────────────────────────────────────────── */
 .think-divider {
   display: flex;
   align-items: center;
@@ -553,6 +594,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .think-empty {
@@ -603,7 +645,7 @@ body {
   background: none;
   border: 1px dashed #2a3a60;
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   font-size: 10px;
   color: #4a5068;
   cursor: pointer;
@@ -638,7 +680,7 @@ body {
   margin-top: 4px;
 }
 
-/* Floating selection popup */
+/* ── Selection popup ─────────────────────────────────────────────────────── */
 .selection-popup {
   position: absolute;
   transform: translateX(-50%);
@@ -653,7 +695,7 @@ body {
 .selection-popup button {
   background: none;
   border: none;
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-size: 12px;
   color: #7b8ef7;
   cursor: pointer;
@@ -663,7 +705,7 @@ body {
 
 .selection-popup button:hover { color: #a0b0ff; }
 
-/* Ideas picker */
+/* ── Ideas picker ────────────────────────────────────────────────────────── */
 .ideas-overlay {
   position: absolute;
   inset: 0;
@@ -672,6 +714,7 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 150;
+  padding: 16px;
 }
 
 .ideas-panel {
@@ -679,6 +722,7 @@ body {
   border: 1px solid #2a2d3a;
   border-radius: 12px;
   width: 90%;
+  max-width: 480px;
   max-height: 80%;
   display: flex;
   flex-direction: column;
@@ -704,6 +748,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .idea-item {
@@ -724,8 +769,8 @@ body {
 }
 
 .idea-check {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 1px solid #3a3d50;
   border-radius: 4px;
   flex-shrink: 0;
@@ -776,7 +821,7 @@ body {
   background: none;
   border: 1px solid #2a2d3a;
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   font-size: 12px;
   color: #4a5068;
   cursor: pointer;
@@ -790,7 +835,7 @@ body {
   background: #1e2235;
   border: 1px solid #3a4080;
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 8px 12px;
   font-size: 12px;
   color: #7b8ef7;
   cursor: pointer;
@@ -801,6 +846,7 @@ body {
 .ideas-spawn-btn:hover:not(:disabled) { background: #252855; color: #a0b0ff; }
 .ideas-spawn-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Think input ─────────────────────────────────────────────────────────── */
 .think-input-bar {
   display: flex;
   gap: 8px;
@@ -840,7 +886,7 @@ body {
 .think-send-btn:hover:not(:disabled) { background: #252855; color: #a0b0ff; }
 .think-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Add more button */
+/* ── Add more button ─────────────────────────────────────────────────────── */
 .btn-add-more {
   background: #1a2235 !important;
   border: 1px solid #2a3a60 !important;
@@ -848,9 +894,10 @@ body {
   font-size: 12px !important;
   white-space: nowrap;
 }
+
 .btn-add-more:hover:not(:disabled) { background: #1e2a50 !important; color: #a0b0ff !important; }
 
-/* Modal */
+/* ── Modal ───────────────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -859,6 +906,7 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 200;
+  padding: 16px;
 }
 
 .modal {
@@ -866,7 +914,7 @@ body {
   border: 1px solid #2a2d3a;
   border-radius: 12px;
   width: 480px;
-  max-width: 90vw;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -876,23 +924,32 @@ body {
   justify-content: space-between;
   padding: 12px 16px;
   border-bottom: 1px solid #2a2d3a;
+  gap: 8px;
 }
 
 .modal-tabs {
   display: flex;
   gap: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex: 1;
 }
+
+.modal-tabs::-webkit-scrollbar { display: none; }
 
 .modal-tab {
   background: none;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 5px 12px;
+  padding: 5px 10px;
   font-size: 12px;
   color: #4a5068;
   cursor: pointer;
   font-family: inherit;
   transition: color 0.1s, background 0.1s, border-color 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .modal-tab:hover { color: #a0aec0; background: #252840; }
@@ -927,7 +984,7 @@ body {
   background: #1e2235;
   border: 1px solid #3a4080;
   border-radius: 6px;
-  padding: 8px 0;
+  padding: 10px 0;
   font-size: 13px;
   color: #7b8ef7;
   cursor: pointer;
@@ -953,12 +1010,124 @@ body {
 .drop-zone:hover { border-color: #4f6ef7; background: #0f1520; }
 
 .drop-zone-icon { font-size: 28px; color: #4a5068; }
-.drop-zone-text { font-size: 13px; color: #a0aec0; }
-.drop-zone-hint { font-size: 11px; color: #4a5068; }
+.drop-zone-text { font-size: 13px; color: #a0aec0; text-align: center; }
+.drop-zone-hint { font-size: 11px; color: #4a5068; text-align: center; }
 
-/* Source type label in detail panel */
 .panel-source-type {
   font-size: 12px;
   color: #4a5068;
   margin-bottom: 4px;
+}
+
+/* ── Mobile breakpoint ───────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Toolbar — two rows on mobile */
+  .toolbar {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .brand {
+    flex: 1;
+    order: 1;
+  }
+
+  .btn-synth {
+    order: 2;
+    padding: 7px 12px !important;
+    font-size: 12px !important;
+  }
+
+  .toolbar input {
+    order: 3;
+    width: 100%;
+    flex: none;
+  }
+
+  /* Add and Note/PDF buttons share second row */
+  .toolbar button:not(.btn-synth) {
+    order: 4;
+    flex: 1;
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+
+  /* Main area — vertical stack on mobile */
+  .main-area {
+    flex-direction: column;
+  }
+
+  /* Board takes available space */
+  .board {
+    flex: 1;
+    min-height: 0;
+    cursor: default;
+  }
+
+  /* Synth panel — bottom sheet on mobile */
+  .synth-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border-left: none;
+    border-top: 2px solid #2a2d3a;
+    height: auto;
+    max-height: 50vh;
+    flex-shrink: 0;
+  }
+
+  /* Shorter synthesis body in bottom sheet mode */
+  .synth-body {
+    max-height: 120px;
+  }
+
+  .synth-body--short {
+    max-height: 80px;
+  }
+
+  /* Full width panel on mobile */
+  .panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100vh - 100px);
+    border-radius: 12px;
+  }
+
+  /* Modal full width on mobile */
+  .modal {
+    width: 100%;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  /* Ideas picker full width */
+  .ideas-panel {
+    width: 100%;
+    max-height: 90%;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .ideas-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  /* Larger tap targets */
+  .card-actions button {
+    padding: 10px 0;
+    font-size: 12px;
+  }
+
+  .synth-action-btn {
+    padding: 10px 0;
+  }
+
+  .think-send-btn {
+    padding: 10px 14px;
+  }
 }
