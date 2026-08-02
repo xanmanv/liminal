@@ -85,6 +85,14 @@ function tagOverlap(a, b) {
   return b.filter(t => setA.has(t.toLowerCase())).length
 }
 
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0
+  let dot = 0, magA = 0, magB = 0
+  for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; magA += a[i]*a[i]; magB += b[i]*b[i] }
+  const mag = Math.sqrt(magA) * Math.sqrt(magB)
+  return mag ? dot / mag : 0
+}
+
 function LiminalCard({ card, isDragging, onDragStart, onDetail, isSelected, onToggleSelect }) {
   const ac = ACCENTS[card.accentIndex ?? 0]
   return (
@@ -237,7 +245,12 @@ function DetailPanel({ card, cards, onClose, onUpdate, onDelete }) {
   function saveTag(i)  { const n=[...tags]; n[i]=tagVal; setTags(n); onUpdate(card.id,{tags:n}); setEditingTag(null) }
   function removeTag(i){ const n=tags.filter((_,idx)=>idx!==i); setTags(n); onUpdate(card.id,{tags:n}) }
   function addTag()    { if(tags.length>=6)return; const n=[...tags,'']; setTags(n); setEditingTag(n.length-1); setTagVal('') }
-  const connected = cards.filter(c => c.id !== card.id && tagOverlap(card.tags, c.tags) > 0)
+  const connected = cards
+    .filter(c => c.id !== card.id && card.embedding && c.embedding)
+    .map(c => ({ ...c, similarity: cosineSimilarity(card.embedding, c.embedding) }))
+    .filter(c => c.similarity > 0.75)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 8)
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -288,7 +301,7 @@ function DetailPanel({ card, cards, onClose, onUpdate, onDelete }) {
             {connected.map(c=>(
               <div key={c.id} className="connection-item">
                 <div className="connection-title">{c.title}</div>
-                <div className="connection-hint">{tagOverlap(card.tags,c.tags)} shared tag{tagOverlap(card.tags,c.tags)!==1?'s':''}</div>
+                <div className="connection-hint">{Math.round(c.similarity*100)}% similar</div>
               </div>
             ))}
           </>
@@ -1012,8 +1025,8 @@ export default function Board() {
           prev.forEach(other => {
             if(other.id===card.id)return
             const dx=other.x-card.x,dy=other.y-card.y,dist=Math.sqrt(dx*dx+dy*dy)||1
-            const overlap=tagOverlap(card.tags,other.tags)
-            if(overlap>0&&dist>ATTRACT_DIST){const s=overlap*DRIFT_SPEED/dist;fx+=dx*s;fy+=dy*s}
+            const sim=cosineSimilarity(card.embedding,other.embedding)
+            if(sim>0.75&&dist>ATTRACT_DIST){const s=sim*DRIFT_SPEED/dist;fx+=dx*s;fy+=dy*s}
             if(dist<CARD_W){const push=(CARD_W-dist)*0.15;fx-=(dx/dist)*push;fy-=(dy/dist)*push}
           })
           const fmag=Math.sqrt(fx*fx+fy*fy)
